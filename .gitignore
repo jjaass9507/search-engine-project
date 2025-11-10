@@ -1,0 +1,12 @@
+# Python 虛擬環境
+venv/
+*.pyc
+__pycache__/
+
+# 系統檔案
+.DS_Store
+
+# 爬蟲與索引產生的「大型資料檔案」
+# 這些檔案應該由使用者在本機自行產生
+*.json
+*.joblib

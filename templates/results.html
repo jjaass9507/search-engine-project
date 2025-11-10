@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>「{{ query }}」的搜尋結果</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 0; background-color: #f9f9f9; }
+        .header { background-color: #fff; padding: 20px; border-bottom: 1px solid #ddd; display: flex; align-items: center; }
+        .logo { font-size: 24px; font-weight: bold; color: #4285f4; text-decoration: none; margin-right: 20px; }
+        .search-form { display: flex; flex-grow: 1; }
+        .search-box { width: 100%; max-width: 600px; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 20px; }
+        .search-btn { padding: 10px 15px; font-size: 16px; background-color: #4285f4; color: white; border: none; border-radius: 20px; cursor: pointer; margin-left: 8px; }
+        
+        .container { max-width: 800px; margin: 20px auto; padding: 0 20px; }
+        .stats { color: #777; font-size: 14px; margin-bottom: 20px; }
+        
+        .result-item { background-color: #fff; padding: 15px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #eee; }
+        .result-item h3 { margin-top: 0; margin-bottom: 5px; }
+        .result-item h3 a { color: #1a0dab; text-decoration: none; font-size: 20px; }
+        .result-item h3 a:hover { text-decoration: underline; }
+        .result-url { color: #006621; font-size: 14px; margin-bottom: 5px; word-break: break-all; }
+        .result-snippet { color: #333; font-size: 16px; margin-bottom: 5px; }
+        .result-score { color: #888; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <a href="/" class="logo">🔍 迷你搜尋引擎</a>
+        <form action="/search" method="GET" class="search-form">
+            <input type="text" name="q" class="search-box" value="{{ query }}">
+            <button type="submit" class="search-btn">搜尋</button>
+        </form>
+    </div>
+
+    <div class="container">
+        {% if results %}
+            <p class="stats">
+                找到約 {{ results|length }} 項結果 (搜尋時間: {{ "%.2f"|format(time_taken) }} 毫秒)
+            </p>
+        {% endif %}
+
+        {% if error_msg %}
+            <p style="color: red;"><strong>錯誤:</strong> {{ error_msg }}</p>
+        {% endif %}
+
+        {% if not results and not error_msg and query %}
+            <p>找不到符合「<strong>{{ query }}</strong>」的結果。</p>
+            <p>建議：</p>
+            <ul>
+                <li>請檢查拼字是否正確。</li>
+                <li>請試試其他關鍵字。</li>
+            </ul>
+        {% endif %}
+        
+        <div class="results-list">
+            {% for res in results %}
+            <div class="result-item">
+                <h3><a href="{{ res.url }}" target="_blank">{{ res.title }}</a></h3>
+                <div class="result-url">{{ res.url }}</div>
+                <div class="result-snippet">{{ res.snippet }}</div>
+                <div class="result-score">相關性分數: {{ "%.4f"|format(res.score) }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</body>
+</html>

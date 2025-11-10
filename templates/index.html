@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的迷你搜尋引擎</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 80vh; background-color: #f4f4f4; }
+        .container { text-align: center; }
+        .search-box { width: 500px; padding: 12px; font-size: 18px; border: 2px solid #ccc; border-radius: 25px; }
+        .search-btn { padding: 12px 20px; font-size: 18px; background-color: #4285f4; color: white; border: none; border-radius: 25px; cursor: pointer; margin-left: 10px; }
+        nav { position: absolute; top: 20px; right: 20px; }
+        nav a { margin-left: 15px; text-decoration: none; color: #555; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/about">關於本站</a>
+    </nav>
+    <div class="container">
+        <h1>🔍 迷你搜尋引擎</h1>
+        
+        <form action="/search" method="GET">
+            <input type="text" name="q" class="search-box" placeholder="請輸入關鍵字...">
+            <button type="submit" class="search-btn">搜尋</button>
+        </form>
+    </div>
+</body>
+</html>

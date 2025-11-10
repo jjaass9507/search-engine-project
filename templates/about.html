@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>關於本站</title>
+    <style>
+        body { font-family: sans-serif; margin: 40px; }
+        .container { max-width: 700px; margin: auto; }
+        a { color: #4285f4; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/">&larr; 返回首頁</a>
+        <h1>關於本搜尋引擎</h1>
+        <p>這是一個基於 Information Retrieval 課程專案打造的迷你搜尋引擎。</</p>
+        <hr>
+        
+        <h2>索引統計 (作業要求)</h2>
+        <p>目前索引庫中共有： <strong>{{ total_pages }}</strong> 份文件。</p>
+        
+        <h2>架構</h2>
+        <ul>
+            <li>爬蟲: Python (requests, BeautifulSoup4)</li>
+            <li>索引: TF-IDF (scikit-learn)</li>
+            <li>搜尋: 餘弦相似度 (scikit-learn)</li>
+            <li>網頁介面: Flask (Python)</li>
+        </ul>
+    </div>
+</body>
+</html>
