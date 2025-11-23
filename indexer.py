@@ -109,12 +109,17 @@ def build_index():
     #     max_features=20000          # 最終矩陣只保留最重要的 20000 個詞
     # )
     
+    # 這代表我們要索引：
+    # 1. 單字 (Unigrams): "artificial", "intelligence"
+    # 2. 雙字片語 (Bigrams): "artificial intelligence"
+
     # 如果是英文 (請取消註解下面這段，並註解掉上面中文的 vectorizer):
     vectorizer = TfidfVectorizer(
-        stop_words='english',     # 使用內建的英文停用詞
+        stop_words='english',      # 如果是中文請改用 stopwords 變數
+        ngram_range=(1, 2),        # <--- 【新增這一行】開啟片語支援！
         max_df=0.98,
         min_df=2,
-        max_features=20000
+        max_features=50000         # 建議稍微把 max_features 調大一點，因為片語會讓詞彙量變多
     )
 
     # 5. 執行 TF-IDF 計算
