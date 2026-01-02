@@ -1,161 +1,83 @@
 import json
-import jieba  # 如果你處理中文，就需要
 import time
+import os
 from sklearn.feature_extraction.text import TfidfVectorizer
-import joblib # 用來儲存/載入模型
+import joblib
+import jieba
+# ★ 修改點：從 utils 匯入函式，而不是在本地定義
+from utils import jieba_tokenizer 
 
 # --- 1. 設定區 ---
 INPUT_FILE = "crawled_data.json"
 OUTPUT_VECTORIZER = "tfidf_vectorizer.joblib"
 OUTPUT_MATRIX = "tfidf_matrix.joblib"
-OUTPUT_METADATA = "metadata.json" # 儲存 URL 和標題，供搜尋結果顯示
+OUTPUT_METADATA = "metadata.json"
+STOPWORDS_FILE = "stopwords.txt"
 
-# --- 2. 中文斷詞函式 (如果你爬的是英文，可以跳過) ---
-def jieba_tokenizer(text):
-    """
-    使用 jieba 進行中文斷詞，並過濾掉單個字的 token
-    """
-    # seg_list = jieba.cut(text, cut_all=False) # 精確模式
-    seg_list = jieba.cut_for_search(text) # 搜尋引擎模式
-    
-    # 過濾掉單個字 (除非它是英文字母或數字，例如 'A' 或 '5')
-    # 並過濾掉純粹的標點符號或空白
-    tokens = []
-    for word in seg_list:
-        word = word.strip()
-        if word and (len(word) > 1 or word.isalnum()):
-            tokens.append(word)
-    
-    return tokens
+# (原本這裡的 def jieba_tokenizer... 請刪除，因為已經移到 utils.py 了)
 
-# --- 3. 載入停用詞 (可選，但建議) ---
-def load_stopwords(file_path="stopwords.txt"):
-    """
-    從檔案載入停用詞列表。
-    你需要自己去網路上下載一份中文停用詞表 (例如：
-    https://github.com/goto456/stopwords/blob/master/cn_stopwords.txt
-    或
-    https://github.com/goto456/stopwords/blob/master/en_stopwords.txt
-    )
-    並儲存為 'stopwords.txt'
-    """
+# --- 3. 載入停用詞 (保持不變) ---
+def load_stopwords(file_path):
+    if not os.path.exists(file_path):
+        return []
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            stopwords = [line.strip() for line in f.readlines()]
-        print(f"成功載入 {len(stopwords)} 個停用詞。")
-        return stopwords
-    except FileNotFoundError:
-        print("警告：未找到 'stopwords.txt'，將不使用停用詞。")
-        return [] # 回傳空列表
+            return [line.strip() for line in f.readlines()]
+    except:
+        return []
 
 # --- 4. 索引器主程式 ---
 def build_index():
-    print("開始建立索引...")
+    print("=== 開始建立索引 (使用 utils.jieba_tokenizer) ===")
     
-    # 1. 載入爬取的資料
-    try:
-        with open(INPUT_FILE, 'r', encoding='utf-8') as f:
-            crawled_data = json.load(f)
-    except FileNotFoundError:
-        print(f"錯誤：找不到 {INPUT_FILE}。請先執行 crawler.py！")
-        return
-    except json.JSONDecodeError:
-        print(f"錯誤：{INPUT_FILE} 檔案內容不是有效的 JSON。")
-        return
-
-    if not crawled_data:
-        print("錯誤：資料檔案為空，無法建立索引。")
-        return
-
-    print(f"成功載入 {len(crawled_data)} 筆爬蟲資料。")
-
-    # 2. 準備文件內容 (corpus) 和 metadata
-    # corpus 是 TfidfVectorizer 需要的「文件內文列表」
+    # ... (讀取資料與準備 corpus 的程式碼保持不變) ...
+    # 為了節省篇幅，這裡省略讀檔部分，請保留你原本的邏輯
+    # 只要確保前面有 import utils 並且移除了本地的 tokenizer 定義即可
+    
+    # 假設你已經讀好了 corpus 和 metadata...
+    # 如果需要完整程式碼，請參考之前的 indexer.py，只需改最上面 import 和刪除 def
+    
+    # 讀取檔案邏輯 (簡化版示意，請保留你原本完整的讀取邏輯)
+    with open(INPUT_FILE, 'r', encoding='utf-8') as f:
+        crawled_data = json.load(f)
+    
     corpus = []
-    # metadata 儲存對應的 URL 和 title，用於前端顯示
     metadata = []
-
     for item in crawled_data:
-        # 確保 text 欄位存在且有內容
-        if 'text' in item and item['text']:
-            corpus.append(item['text'])
+        text = item.get('text', '')
+        if text:
+            corpus.append(text)
             metadata.append({
                 "url": item.get("url", ""),
                 "title": item.get("title", "No Title"),
-                "text": item['text']  # <-- 請加上這一行
+                "text": text
             })
-        else:
-            print(f"警告：跳過一筆資料，缺少 'text' 欄位。 URL: {item.get('url')}")
 
-    if not corpus:
-        print("錯誤：沒有可供索引的有效文字內容。")
-        return
-        
-    print(f"準備好 {len(corpus)} 份文件進行索引。")
+    stopwords = load_stopwords(STOPWORDS_FILE)
 
-    # 3. 載入停用詞
-    stopwords = load_stopwords() # 試著載入 'stopwords.txt'
-
-    # 4. 設定 TF-IDF Vectorizer
     print("正在設定 TF-IDF Vectorizer...")
     
-    # ** 關鍵設定：中文 vs 英文 **
-    # 如果是中文:
-    # vectorizer = TfidfVectorizer(
-    #     tokenizer=jieba_tokenizer,  # 使用 jieba 斷詞
-    #     stop_words=stopwords if stopwords else None, # 使用停用詞
-    #     max_df=0.8,                 # 忽略在 80% 以上文件中都出現的詞 (太常見)
-    #     min_df=5,                   # 忽略在 5 份以下文件中出現的詞 (太罕見)
-    #     max_features=20000          # 最終矩陣只保留最重要的 20000 個詞
-    # )
-    
-    # 這代表我們要索引：
-    # 1. 單字 (Unigrams): "artificial", "intelligence"
-    # 2. 雙字片語 (Bigrams): "artificial intelligence"
-
-    # 如果是英文 (請取消註解下面這段，並註解掉上面中文的 vectorizer):
+    # ★ 這裡會使用從 utils 匯入的 jieba_tokenizer
     vectorizer = TfidfVectorizer(
-        stop_words='english',      # 如果是中文請改用 stopwords 變數
-        ngram_range=(1, 2),        # <--- 【新增這一行】開啟片語支援！
-        max_df=0.98,
+        tokenizer=jieba_tokenizer, 
+        stop_words=stopwords if stopwords else None,
+        max_df=0.95,
         min_df=2,
-        max_features=50000         # 建議稍微把 max_features 調大一點，因為片語會讓詞彙量變多
+        max_features=50000,
+        token_pattern=None
     )
 
-    # 5. 執行 TF-IDF 計算
-    print("正在計算 TF-IDF 矩陣... (這可能需要幾分鐘)")
-    start_time = time.time()
-    
+    print("正在計算 TF-IDF 矩陣...")
     tfidf_matrix = vectorizer.fit_transform(corpus)
     
-    end_time = time.time()
-    print(f"TF-IDF 矩陣計算完成！")
-    print(f"矩陣維度: {tfidf_matrix.shape}") # (文件數量, 詞彙數量)
-    print(f"花費時間: {end_time - start_time:.2f} 秒")
-
-    # 6. 儲存結果
-    print("正在儲存索引檔案...")
-    
-    # 儲存 TF-IDF 矩陣
+    print("正在儲存模型...")
     joblib.dump(tfidf_matrix, OUTPUT_MATRIX)
-    print(f"TF-IDF 矩陣已儲存至 {OUTPUT_MATRIX}")
-
-    # 儲存 Vectorizer 物件 (非常重要，搜尋時需要用它來轉換 query)
-    joblib.dump(vectorizer, OUTPUT_VECTORIZER)
-    print(f"Vectorizer 物件已儲存至 {OUTPUT_VECTORIZER}")
-
-    # 儲存 metadata
+    joblib.dump(vectorizer, OUTPUT_VECTORIZER) # 這次存進去的是指向 utils 的參考
+    
     with open(OUTPUT_METADATA, 'w', encoding='utf-8') as f:
         json.dump(metadata, f, ensure_ascii=False, indent=4)
-    print(f"Metadata 已儲存至 {OUTPUT_METADATA}")
 
-    print("\n索引建立完成！")
+    print("索引重新建立完成！")
 
-# --- 5. 執行索引器 ---
 if __name__ == "__main__":
-    # 為了讓 jieba 載入自訂詞典或初始化 (如果需要的話)
-    # 這裡可以放一個 dummy 斷詞，確保載入完成
-    if 'jieba' in globals():
-        jieba.cut("初始化jieba") 
-        
     build_index()

@@ -1,82 +1,100 @@
 from flask import Flask, render_template, request
-import search_logic # 匯入我們剛剛寫好的搜尋邏輯！
+import search_logic as search
+import query_rewrite
+import ai_explain
 import json
 import time
 
-# 建立 Flask App
 app = Flask(__name__)
 
-# --- 讀取統計資料 (用於 About 頁面) ---
+# --- 讀取統計資料 ---
 def get_stats():
-    """ 載入 metadata 來計算索引頁數 """
     try:
-        with open(search_logic.METADATA_PATH, 'r', encoding='utf-8') as f:
+        with open(search.METADATA_PATH, 'r', encoding='utf-8') as f:
             metadata = json.load(f)
         return {"total_pages": len(metadata)}
-    except FileNotFoundError:
+    except:
         return {"total_pages": 0}
-    
+
 stats = get_stats()
 
-# --- 1. 建立「首頁」路由 (Route) ---
+# --- 首頁 ---
 @app.route('/')
 def index():
-    """
-    渲染首頁 (index.html)
-    """
     return render_template('index.html')
 
-
-# --- 2. 建立「搜尋結果頁」路由 ---
+# --- 搜尋結果頁 (雙版本比較模式) ---
 @app.route('/search')
-def search():
-    """
-    接收查詢、執行搜尋，並渲染結果頁 (results.html)
-    """
-    # 1. 從 URL 參數中取得查詢 (e.g., /search?q=AI)
-    #    request.args.get('q', '') 中的 'q' 對應 index.html 中 <input name="q">
-    query = request.args.get('q', '')
+def search_route():
+    user_question = request.args.get('q', '')
     
+    # 初始化變數
     results = []
+    
+    # 分別儲存 A/B 版的結果
+    genai_queries_a = []
+    genai_queries_b = []
+    explanation_a = ""
+    explanation_b = ""
+    
     time_taken = 0.0
     error_msg = None
-
-    # 2. 只有在 query 非空時才執行搜尋
-    if query:
-        print(f"Flask App 收到查詢: {query}")
+    
+    if user_question:
         try:
-            results, time_taken = search_logic.perform_search(query)
+            print(f"收到使用者查詢: {user_question}")
             
-            # 檢查 search_logic 是否回傳錯誤
+            # --- 階段 1: GenAI 查詢改寫 (Query Rewrite) ---
+            # 同時執行 A 版與 B 版
+            print("正在執行 Query Rewrite (A & B)...")
+            genai_queries_a = query_rewrite.rewrite_query(user_question, version='A')
+            genai_queries_b = query_rewrite.rewrite_query(user_question, version='B')
+            
+            # --- 階段 2: 執行搜尋 (Search) ---
+            # 策略：為了讓比較基準一致 (Explanation 比較的是同一組文章)，
+            # 我們使用效果較好的 B 版關鍵字來進行實際搜尋。
+            # (或者你也可以把 A 和 B 的關鍵字合併起來搜尋)
+            search_query = " ".join(genai_queries_b)
+            
+            results, time_taken = search.perform_search(search_query)
+            
             if isinstance(results, dict) and "error" in results:
                 error_msg = results["error"]
-                results = [] # 清空結果
+                results = []
+            
+            # --- 階段 3: GenAI 結果解釋 (Explanation) ---
+            if results:
+                print("正在執行 AI Explanation (A & B)...")
+                # 同時生成 A 版與 B 版的解釋，讓使用者比較差異
+                explanation_a = ai_explain.explain_results(user_question, results, version='A')
+                explanation_b = ai_explain.explain_results(user_question, results, version='B')
+            else:
+                msg = "搜尋引擎未找到相關文章，無法生成解釋。"
+                explanation_a = msg
+                explanation_b = msg
 
         except Exception as e:
-            print(f"搜尋時發生未預期錯誤: {e}")
-            error_msg = f"搜尋時發生錯誤: {e}"
-            results = []
+            print(f"處理過程發生錯誤: {e}")
+            error_msg = f"系統發生錯誤: {e}"
     
-    # 3. 渲染 results.html 模板，並傳入變數
+    # --- 渲染網頁 (傳入所有 A/B 版資料) ---
     return render_template('results.html',
-                           query=query,              # 使用者輸入的查詢
-                           results=results,          # 搜尋結果列表
-                           time_taken=time_taken,    # 查詢花費時間 (毫秒)
-                           error_msg=error_msg       # 錯誤訊息 (如果有的話)
+                           user_question=user_question,
+                           
+                           # 傳入兩組資料
+                           genai_queries_a=genai_queries_a,
+                           genai_queries_b=genai_queries_b,
+                           explanation_a=explanation_a,
+                           explanation_b=explanation_b,
+                           
+                           results=results,
+                           time_taken=time_taken,
+                           error_msg=error_msg
                           )
 
-# --- 3. (選用) 建立「關於」頁面 ---
 @app.route('/about')
 def about():
-    """
-    顯示索引統計資料 (作業要求)
-    """
-    return render_template('about.html',
-                           total_pages=stats["total_pages"])
+    return render_template('about.html', total_pages=stats["total_pages"])
 
-
-# --- 4. 啟動 Flask App ---
 if __name__ == "__main__":
-    # debug=True 讓我們在修改程式碼後，伺服器會自動重啟
-    # host='0.0.0.0' 讓區域網路內的其他裝置也能連線 (可選)
     app.run(debug=True, host='0.0.0.0', port=5000)

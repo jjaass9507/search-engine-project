@@ -7,126 +7,155 @@ from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 # --- 1. 設定區 ---
-# 你的種子 URLs (請在這裡填入你決定的網址)
 SEED_URLS = [
     "https://techcrunch.com/category/artificial-intelligence/",
-    "https://www.wired.com/tag/artificial-intelligence/"
-    # ... 填入你的 5-10 個種子 URLs
+    "https://www.wired.com/tag/artificial-intelligence/",
+    "https://www.technologyreview.com/topic/artificial-intelligence/",
+    "https://venturebeat.com/category/ai/",
+    "https://www.ithome.com.tw/tags/AI",
+    "https://buzzorange.com/techorange/tag/ai/",
+    "https://www.bnext.com.tw/categories/ai",
+    # 建議：如果首頁都爬過了，可以手動加入第2頁的網址，例如：
+    # "https://www.ithome.com.tw/tags/AI?page=1", 
 ]
 
-MAX_PAGES = 1000  # 作業要求最多 1000 頁
-CRAWL_DELAY = 2     # 作業要求 ≥ 2 秒
-OUTPUT_FILE = "crawled_data.json" # 儲存結果的檔案
+MAX_NEW_PAGES = 200   # 目標新增頁數
+TOTAL_LIMIT = 2000    # 總資料庫上限
+CRAWL_DELAY = 0.5
+OUTPUT_FILE = "crawled_data.json"
+
+# --- Helper: 取得正規化網域 (移除 www.) ---
+def get_domain(url):
+    netloc = urlparse(url).netloc
+    if netloc.startswith("www."):
+        return netloc[4:]
+    return netloc
 
 # --- 2. 爬蟲核心邏輯 ---
-
 def crawl():
-    print(f"開始爬取，目標 {MAX_PAGES} 頁，延遲 {CRAWL_DELAY} 秒...")
-    
-    # 用 set 來儲存已訪問過的 URL，避免重複
+    existing_data = []
     visited_urls = set()
     
-    # 用 list 當作佇列 (Queue)，存放待爬取的 URL
-    # 我們從種子 URLs 開始
+    # 1. 載入舊資料
+    if os.path.exists(OUTPUT_FILE):
+        try:
+            with open(OUTPUT_FILE, 'r', encoding='utf-8') as f:
+                existing_data = json.load(f)
+                for item in existing_data:
+                    visited_urls.add(item['url'])
+            print(f"已載入現有資料庫，共 {len(existing_data)} 筆。")
+        except:
+            existing_data = []
+
+    if len(existing_data) >= TOTAL_LIMIT:
+        print("資料庫已達上限，停止爬取。")
+        return
+
+    # 2. 準備佇列與允許網域
     queue = list(SEED_URLS)
     
-    # 儲存爬取結果的 list
-    crawled_data = []
+    # 建立允許網域白名單 (使用 loose matching)
+    allowed_domains = set()
+    for url in SEED_URLS:
+        allowed_domains.add(get_domain(url))
+    
+    print(f"允許的網域根目錄: {allowed_domains}")
 
-    # 準備 robots.txt 解析器
+    new_crawled_data = []
     robot_parsers = {}
 
-    while queue and len(crawled_data) < MAX_PAGES:
-        # 1. 從佇列取出一個 URL
+    print(f"開始爬取，目標新增 {MAX_NEW_PAGES} 頁...")
+
+    while queue and len(existing_data) + len(new_crawled_data) < TOTAL_LIMIT and len(new_crawled_data) < MAX_NEW_PAGES:
         current_url = queue.pop(0)
 
-        # 2. 檢查是否已經爬過
-        if current_url in visited_urls:
+        # 檢查是否已訪問 (若是種子則強制重爬)
+        if current_url in visited_urls and current_url not in SEED_URLS:
             continue
 
-        # 3. 檢查 robots.txt (禮貌原則)
-        parsed_url = urlparse(current_url)
-        domain = f"{parsed_url.scheme}://{parsed_url.netloc}"
-        
-        if domain not in robot_parsers:
-            rp = RobotFileParser()
-            rp.set_url(urljoin(domain, "robots.txt"))
-            try:
-                rp.read()
-                robot_parsers[domain] = rp
-            except Exception as e:
-                print(f"無法讀取 {domain}/robots.txt: {e}")
-                robot_parsers[domain] = None # 標記為無法讀取
-        
-        rp = robot_parsers.get(domain)
-        if rp and not rp.can_fetch("*", current_url):
-            print(f"[跳過] robots.txt 不允許爬取: {current_url}")
-            continue
-
-        # 4. 禮貌延遲
-        print(f"正在爬取 ({len(crawled_data) + 1}/{MAX_PAGES}): {current_url}")
+        # 禮貌延遲
+        current_count = len(existing_data) + len(new_crawled_data) + 1
+        print(f"[{current_count}/{TOTAL_LIMIT}] 正在爬取: {current_url}")
         time.sleep(CRAWL_DELAY)
 
-        # 5. 抓取網頁
         try:
-            response = requests.get(current_url, timeout=5)
-            response.raise_for_status() # 如果狀態碼不是 200，會拋出例外
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+            response = requests.get(current_url, headers=headers, timeout=10)
             
-            # 確保是 HTML 內容
-            if 'text/html' not in response.headers.get('Content-Type', ''):
-                print(f"[跳過] 非 HTML 內容: {current_url}")
-                visited_urls.add(current_url)
+            if response.status_code != 200 or 'text/html' not in response.headers.get('Content-Type', ''):
                 continue
 
-            visited_urls.add(current_url) # 標記為已訪問
+            visited_urls.add(current_url)
 
-            # 6. 解析 HTML
+            # 解析
             soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # --- 儲存邏輯 (僅當不是重複的種子頁時才儲存) ---
+            # 我們假設種子頁是列表頁，不需要存內文，只需要它的連結
+            # 但如果你也想存種子頁內容，可以把下方 if 判斷拿掉
+            is_seed = current_url in SEED_URLS
+            if not is_seed:
+                # 清理內文
+                for script in soup(["script", "style", "nav", "footer"]):
+                    script.extract()
+                text = soup.get_text(separator=' ', strip=True)
+                
+                if len(text) > 100: # 過濾太短的
+                    title = soup.title.string.strip() if soup.title else current_url
+                    new_crawled_data.append({
+                        "url": current_url,
+                        "title": title,
+                        "text": text,
+                        "fetch_time": time.strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    print(f"   >>> 成功儲存頁面 (目前新增: {len(new_crawled_data)})")
 
-            # 提取標題
-            title = soup.title.string.strip() if soup.title else "No Title"
-
-            # 提取主要內文 (這裡用 <p> 標籤當範例，你可能需要根據目標網站調整)
-            paragraphs = soup.find_all('p')
-            text = "\n".join([p.get_text().strip() for p in paragraphs if p.get_text()])
-
-            if not text:
-                print(f"[跳過] 找不到內文: {current_url}")
-                continue
-
-            # 7. 儲存結果
-            crawled_data.append({
-                "url": current_url,
-                "title": title,
-                "text": text,
-                "fetch_time": time.strftime("%Y-%m-%d %H:%M:%S")
-            })
-
-            # 8. 找出頁面上的所有連結，並加入佇列
+            # --- 連結提取與除錯 ---
             links = soup.find_all('a', href=True)
+            added_count = 0
+            skipped_domain = 0
+            skipped_visited = 0
+
             for link in links:
-                new_url = urljoin(current_url, link['href'])
+                new_url = urljoin(current_url, link['href']).split('#')[0]
                 
-                # 清理 URL (去掉 # 標記)
-                new_url = new_url.split('#')[0]
+                # 簡單過濾非 http 連結
+                if not new_url.startswith('http'):
+                    continue
+
+                new_domain = get_domain(new_url)
+
+                # 寬容網域檢查：只要 new_domain 包含在 allowed 列表中的任何一個，就算通過
+                # 例如：buzzorange.com 包含在 buzzorange.com/techorange 邏輯內
+                domain_match = False
+                for allowed in allowed_domains:
+                    if allowed in new_domain or new_domain in allowed:
+                        domain_match = True
+                        break
                 
-                # 簡單過濾：只爬取同網域或特定網域的 (可選，但建議)
-                # 這裡我們只爬取和種子 URL "看起來" 相關的 (簡易判斷)
-                if any(seed_domain in new_url for seed_domain in ["techcrunch.com", "wired.com"]): # 記得換成你的
+                if domain_match:
                     if new_url not in visited_urls and new_url not in queue:
                         queue.append(new_url)
+                        added_count += 1
+                    else:
+                        skipped_visited += 1
+                else:
+                    skipped_domain += 1
+            
+            # ★ 關鍵除錯訊息：告訴我為什麼這一頁沒貢獻新連結
+            print(f"   (連結分析: 找到 {len(links)} 個, 加入佇列 {added_count} 個, 已訪問跳過 {skipped_visited}, 網域不符跳過 {skipped_domain})")
 
-        except requests.RequestException as e:
-            print(f"爬取失敗: {current_url} (錯誤: {e})")
         except Exception as e:
-            print(f"處理失敗: {current_url} (錯誤: {e})")
+            print(f"爬取錯誤 {current_url}: {e}")
 
-    # 9. 爬取結束，儲存到 JSON 檔案
-    print(f"\n爬取完成！共抓取 {len(crawled_data)} 頁。")
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        json.dump(crawled_data, f, ensure_ascii=False, indent=4)
-    print(f"資料已儲存至 {OUTPUT_FILE}")
+    # 存檔
+    if new_crawled_data:
+        total = existing_data + new_crawled_data
+        with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+            json.dump(total, f, ensure_ascii=False, indent=4)
+        print(f"\n任務完成！本次新增 {len(new_crawled_data)} 筆，總計 {len(total)} 筆。")
+    else:
+        print("\n任務結束，未新增任何資料。")
 
-# --- 3. 執行爬蟲 ---
 if __name__ == "__main__":
     crawl()

@@ -3,68 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>「{{ query }}」的搜尋結果</title>
+    <title>搜尋結果 - {{ user_question }}</title>
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 0; background-color: #f9f9f9; }
-        .header { background-color: #fff; padding: 20px; border-bottom: 1px solid #ddd; display: flex; align-items: center; }
-        .logo { font-size: 24px; font-weight: bold; color: #4285f4; text-decoration: none; margin-right: 20px; }
-        .search-form { display: flex; flex-grow: 1; }
-        .search-box { width: 100%; max-width: 600px; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 20px; }
-        .search-btn { padding: 10px 15px; font-size: 16px; background-color: #4285f4; color: white; border: none; border-radius: 20px; cursor: pointer; margin-left: 8px; }
+        body { font-family: "Microsoft JhengHei", Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; line-height: 1.6; background-color: #f9f9f9; }
         
-        .container { max-width: 800px; margin: 20px auto; padding: 0 20px; }
-        .stats { color: #777; font-size: 14px; margin-bottom: 20px; }
+        /* Header & Search Box */
+        .header { display: flex; align-items: center; margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .search-box { flex-grow: 1; margin-left: 20px; }
+        .search-box input { width: 70%; padding: 10px; font-size: 16px; border: 1px solid #ddd; border-radius: 4px; }
+        .search-box button { padding: 10px 20px; font-size: 16px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; }
+        .search-box button:hover { background-color: #0056b3; }
         
-        .result-item { background-color: #fff; padding: 15px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #eee; }
-        .result-item h3 { margin-top: 0; margin-bottom: 5px; }
-        .result-item h3 a { color: #1a0dab; text-decoration: none; font-size: 20px; }
-        .result-item h3 a:hover { text-decoration: underline; }
+        /* Tabs 導航列 */
+        .tabs { display: flex; margin-bottom: 0; border-bottom: 2px solid #ddd; }
+        .tab-button {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #e9ecef;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+            margin-right: 5px;
+            font-weight: bold;
+            color: #555;
+            transition: all 0.3s;
+        }
+        .tab-button.active {
+            background-color: #fff;
+            color: #0056b3;
+            border-bottom: 2px solid #fff; /* 蓋過底線 */
+            margin-bottom: -2px;
+        }
+        
+        /* GenAI 內容區塊 */
+        .ai-section { 
+            background-color: white; 
+            padding: 20px; 
+            border: 1px solid #ddd; 
+            border-top: none; 
+            border-radius: 0 0 8px 8px; 
+            margin-bottom: 25px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        /* 隱藏/顯示控制 */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .ai-title { font-weight: bold; color: #333; display: flex; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .keyword-tag { display: inline-block; background: #e1ecf4; color: #39739d; padding: 4px 10px; border-radius: 15px; font-size: 0.9em; margin-right: 5px; margin-bottom: 5px; }
+        
+        /* 搜尋結果樣式 */
+        .meta-info { color: #777; font-size: 0.9em; margin-bottom: 15px; }
+        .result-item { background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #eee; }
+        .result-title { font-size: 18px; margin-bottom: 5px; }
+        .result-title a { text-decoration: none; color: #1a0dab; }
+        .result-title a:hover { text-decoration: underline; }
         .result-url { color: #006621; font-size: 14px; margin-bottom: 5px; word-break: break-all; }
-        .result-snippet { color: #333; font-size: 16px; margin-bottom: 5px; }
-        .result-score { color: #888; font-size: 12px; }
+        .result-snippet { color: #545454; font-size: 14px; }
+        
+        .error { color: red; font-weight: bold; background: #ffe6e6; padding: 10px; border-radius: 5px; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <a href="/" class="logo">🔍 迷你搜尋引擎</a>
-        <form action="/search" method="GET" class="search-form">
-            <input type="text" name="q" class="search-box" value="{{ query }}">
-            <button type="submit" class="search-btn">搜尋</button>
-        </form>
-    </div>
-
-    <div class="container">
-        {% if results %}
-            <p class="stats">
-                找到約 {{ results|length }} 項結果 (搜尋時間: {{ "%.2f"|format(time_taken) }} 毫秒)
-            </p>
-        {% endif %}
-
-        {% if error_msg %}
-            <p style="color: red;"><strong>錯誤:</strong> {{ error_msg }}</p>
-        {% endif %}
-
-        {% if not results and not error_msg and query %}
-            <p>找不到符合「<strong>{{ query }}</strong>」的結果。</p>
-            <p>建議：</p>
-            <ul>
-                <li>請檢查拼字是否正確。</li>
-                <li>請試試其他關鍵字。</li>
-            </ul>
-        {% endif %}
-        
-        <div class="results-list">
-            {% for res in results %}
-            <div class="result-item">
-                <h3><a href="{{ res.url }}" target="_blank">{{ res.title }}</a></h3>
-                <div class="result-url">{{ res.url }}</div>
-                <div class="result-snippet">{{ res.snippet }}</div>
-                <div class="result-score">相關性分數: {{ "%.4f"|format(res.score) }}</div>
-            </div>
-            {% endfor %}
+        <h1 style="margin:0;"><a href="/" style="text-decoration: none; color: #333;">AI Search</a></h1>
+        <div class="search-box">
+            <form action="/search" method="get">
+                <input type="text" name="q" value="{{ user_question }}" required placeholder="輸入問題...">
+                <button type="submit">搜尋</button>
+            </form>
         </div>
     </div>
 
+    {% if error_msg %}
+        <div class="error">
+            <p>{{ error_msg }}</p>
+        </div>
+    {% endif %}
+
+    {% if user_question %}
+        
+        <div class="tabs">
+            <div class="tab-button active" onclick="openTab('B')">✨ Version B (進階版 Prompt)</div>
+            <div class="tab-button" onclick="openTab('A')">📝 Version A (基礎版 Prompt)</div>
+        </div>
+
+        <div id="TabB" class="tab-content active ai-section">
+            <div class="ai-title">
+                <span style="margin-right:8px;">🚀</span> Prompt Engineering 分析：進階模型 (Advanced)
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <strong>生成的關鍵字 (JSON & 雙語優化)：</strong><br>
+                <div style="margin-top: 5px;">
+                    {% for q in genai_queries_b %}
+                        <span class="keyword-tag">{{ q }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div>
+                <strong>AI 綜合摘要 (繁中優先 & 來源引用)：</strong>
+                <p style="white-space: pre-wrap; margin-top: 5px; color: #333; background: #f8fdf8; padding: 10px; border-left: 4px solid #4CAF50;">{{ explanation_b }}</p>
+            </div>
+        </div>
+
+        <div id="TabA" class="tab-content ai-section">
+            <div class="ai-title">
+                <span style="margin-right:8px;">⚠️</span> Prompt Engineering 分析：基礎模型 (Basic)
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <strong>生成的關鍵字 (原始)：</strong><br>
+                <div style="margin-top: 5px;">
+                    {% for q in genai_queries_a %}
+                        <span class="keyword-tag" style="background:#f0f0f0; color:#666;">{{ q }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div>
+                <strong>AI 綜合摘要 (無格式限制)：</strong>
+                <p style="white-space: pre-wrap; margin-top: 5px; color: #555; background: #f0f0f0; padding: 10px; border-left: 4px solid #999;">{{ explanation_a }}</p>
+            </div>
+        </div>
+
+        <div class="meta-info">
+            找到 {{ results|length }} 筆結果 (耗時 {{ "%.2f"|format(time_taken) }} ms)
+        </div>
+
+        <div>
+            {% for res in results %}
+            <div class="result-item">
+                <div class="result-title">
+                    <a href="{{ res.url }}" target="_blank">{{ res.title }}</a>
+                </div>
+                <div class="result-url">{{ res.url }}</div>
+                <div class="result-snippet">
+                    {{ res.snippet }} 
+                    <span style="color: #aaa; font-size: 0.8em; margin-left: 10px;">(Score: {{ "%.4f"|format(res.score) }})</span>
+                </div>
+            </div>
+            {% else %}
+                <p>找不到相關結果，請嘗試其他關鍵字。</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <script>
+        function openTab(tabName) {
+            // 1. 隱藏所有內容
+            var contents = document.getElementsByClassName("tab-content");
+            for (var i = 0; i < contents.length; i++) {
+                contents[i].classList.remove("active");
+            }
+            
+            // 2. 取消所有按鈕的 active 狀態
+            var buttons = document.getElementsByClassName("tab-button");
+            for (var i = 0; i < buttons.length; i++) {
+                buttons[i].classList.remove("active");
+            }
+            
+            // 3. 顯示指定的內容並啟用按鈕
+            document.getElementById("Tab" + tabName).classList.add("active");
+            
+            // 找到點擊的按鈕並加上 active (這裡簡單用 event.currentTarget)
+            event.currentTarget.classList.add("active");
+        }
+    </script>
 </body>
 </html>
