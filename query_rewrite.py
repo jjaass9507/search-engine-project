@@ -14,7 +14,7 @@ client = genai.Client(api_key=API_KEY)
 
 # ★ 設定為 Gemma 模型 (請確認你的列表中有這個名稱，通常要有 -it 結尾)
 # 例如: 'gemma-3-12b-it' 或 'gemma-3-4b-it'
-model_name = 'gemma-3-12b-it' 
+model_name = 'gemma-3-4b-it' 
 
 def clean_json_text(text):
     """

@@ -10,7 +10,7 @@ if not API_KEY:
 client = genai.Client(api_key=API_KEY)
 
 # ★ 設定為 Gemma 模型
-model_name = 'gemma-3-12b-it'
+model_name = 'gemma-3-4b-it'
 
 def explain_results(user_question, search_results, version='B'):
     if not search_results:
